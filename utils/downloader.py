@@ -114,4 +114,3 @@ def download_video_for_vc(query_or_url: str):
         if not os.path.exists(mp4_path):
             mp4_path = filename
         return mp4_path, info.get("title"), info.get("duration"), info.get("webpage_url")
-

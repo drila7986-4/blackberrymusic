@@ -174,8 +174,12 @@ async def is_group_admin(chat_id: int, user_id: int) -> bool:
 # (bulk/passive tracking nahi — sirf wahi log jo bot se directly interact karte hain)
 @bot.on_message(filters.regex(r"^/\w+"), group=-5)
 async def cache_command_user(_, message: Message):
+    # User-cache/ MongoDB must never block the actual command handlers.
     if message.from_user:
-        await cache_user(message.from_user, reason="used a command")
+        try:
+            await cache_user(message.from_user, reason="used a command")
+        except Exception as e:
+            print(f"[user-cache] skipped: {e}")
 
 
 @bot.on_message(filters.command("start"))
@@ -1216,7 +1220,8 @@ async def play_cmd(_, message: Message):
                 "Ya kisi audio/video message par reply karke /play bhejo."
             )
         query = message.text.split(None, 1)[1]
-        msg = await message.reply_text(f"Dhoondh raha hu: {query} ...")
+        # Immediate acknowledgement: never make the user wait silently while yt-dlp works.
+        msg = await message.reply_text(f"⚡ Request received!\n🎵 **{query}**\n⏳ Downloading...", disable_web_page_preview=True)
         try:
             path, title, duration, url = await asyncio.to_thread(download_for_vc, query)
         except Exception as e:
@@ -1253,7 +1258,8 @@ async def vplay_cmd(_, message: Message):
                 "Ya kisi audio/video message par reply karke /vplay bhejo."
             )
         query = message.text.split(None, 1)[1]
-        msg = await message.reply_text(f"Video dhoondh raha hu: {query} ...")
+        # Immediate acknowledgement: never make the user wait silently while yt-dlp works.
+        msg = await message.reply_text(f"⚡ Request received!\n🎬 **{query}**\n⏳ Downloading video...", disable_web_page_preview=True)
         try:
             path, title, duration, url = await asyncio.to_thread(download_video_for_vc, query)
         except Exception as e:
@@ -1733,5 +1739,7 @@ async def main():
 
 if __name__ == "__main__":
     keep_alive()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

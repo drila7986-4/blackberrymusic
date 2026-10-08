@@ -1,0 +1,13 @@
+# Secrets - never commit these
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Pyrogram session files (contain live login credentials)
+*.session
+*.session-journal
+
+# Downloaded media (temporary)
+downloads/

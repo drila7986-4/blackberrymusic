@@ -1,0 +1,10 @@
+BLACKBERRY MUSIC - MUSIC PLAYBACK FIX
+
+1. This package already contains /play, /pause, /resume, /skip, /stop, /queue and autoplay logic.
+2. requirements.txt now pins Kurigram 2.2.26 and uses yt-dlp[default].
+3. render.yaml installs ffmpeg during the Render build and starts python bot.py.
+4. A /musicstatus command was added. In the group, send /musicstatus to check the assistant account and downloaded media.
+5. The assistant/user account from SESSION_STRING must be a member of the group where music is played.
+6. Start a Telegram Voice Chat in the group before /play. If the PyTgCalls version auto-starts it, /play may create it automatically; otherwise the error message will say to start it.
+7. Keep BOT_TOKEN, API_ID, API_HASH, SESSION_STRING, OWNER_ID and MONGO_URI only in Render Environment Variables. Do NOT commit .env.
+8. After uploading these changes to GitHub, redeploy the Render service.

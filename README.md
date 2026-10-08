@@ -111,6 +111,7 @@ FFmpeg system me installed hona chahiye:
 | `/help` | Categorized help menu (Music & Video / Group Management / Owner & Sudo) |
 | `/play <song/link>` | VC me audio stream/queue karo — reply karke bhi chala sakte ho |
 | `/vplay <video/link>` | VC me video (audio ke saath) stream/queue karo — reply karke bhi chala sakte ho |
+| `/autoplay on|off` | Autoplay ON/OFF; default ON, queue ka next track automatically chalega |
 | `/pause` | Playback pause |
 | `/resume` | Playback resume |
 | `/skip` | Agla item queue se |
@@ -236,3 +237,24 @@ every group it lands in.
   ko adjust karna padega.
 - Downloaded files `downloads/` folder me temporarily banti hain aur use ke baad
   khud delete ho jaati hain.
+
+
+### Broadcast target commands
+- `/setuser` — user ke message par reply karke add karo, ya `/setuser USER_ID`
+- `/unsetuser USER_ID` — user remove
+- `/setgroup` — current group ko registered broadcast target banao
+- `/unsetgroup` — current group remove
+- `/setlist` — registered users/groups count
+
+### Music DM button
+Group music replies include a **🎧 Open Music Bot in DM** button.
+
+### Autoplay
+Autoplay default **ON**. Jab current audio/video `StreamEnded` event deta hai, bot finished item ko queue se remove karke next queued item ko automatically play karta hai. `/stop` queue clear karke autoplay chain ko rok deta hai.
+
+
+### Now Playing Player
+- Music/video start hone par Now Playing card aata hai.
+- Autoplay button card par ON/OFF hota hai.
+- Autoplay default ON hai; queue me next track automatic play hota rahega.
+- Pause, resume, replay, skip, stop aur playlist buttons included hain.

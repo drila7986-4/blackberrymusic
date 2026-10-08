@@ -3,6 +3,7 @@ from db import settings_col
 DEFAULT_SETTINGS = {
     "welcome": True,
     "clean_service": False,
+    "autoplay": True,
 }
 
 

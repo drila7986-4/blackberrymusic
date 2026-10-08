@@ -16,3 +16,6 @@ coins_col = db["game_coins"]
 
 # Users who explicitly started the bot in private chat (required for group games)
 game_users_col = db["game_users"]
+# Explicit broadcast targets set by owner/sudo commands
+broadcast_users_col = db["broadcast_users"]
+broadcast_groups_col = db["broadcast_groups"]

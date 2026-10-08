@@ -1,7 +1,7 @@
-kurigram
+Kurigram==2.2.26
 tgcrypto==1.2.5
 py-tgcalls==2.2.11
-yt-dlp
+yt-dlp[default]
 python-dotenv
 aiohttp
 flask>3.0.0

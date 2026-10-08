@@ -35,6 +35,7 @@ from user_cache import cache_user, get_cached_user
 from group_admin_cache import admin_cache_loop, get_all_cached_admins, get_cached_admins
 from games import new_puzzle, check_answer, cancel_game, add_score, score
 from game_coins import get_coins, add_coins, top_coins, mark_game_user_started, has_started_in_dm
+from db import broadcast_users_col, broadcast_groups_col
 
 bot = Client("blackberry_music", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 assistant = Client("assistant", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
@@ -81,6 +82,13 @@ def start_buttons() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def music_dm_keyboard() -> InlineKeyboardMarkup:
+    username = getattr(getattr(bot, "me", None), "username", None) or "BlackberryMusicBot"
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("🎧 Open Music Bot in DM", url=f"https://t.me/{username}?start=music")
+    ]])
 
 
 async def settings_keyboard(chat_id: int) -> InlineKeyboardMarkup:
@@ -198,7 +206,10 @@ async def start_cmd(_, message: Message):
             "**Direct MP3 chahiye to:**\n"
             "/song <song name> - MP3 file bhej dunga\n\n"
             "Poori list ke liye niche **❓ Help** dabao, ya /help bhejo.",
-            reply_markup=main_buttons(),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎧 Open Music Bot in DM", url=f"https://t.me/{bot.me.username}?start=music")],
+                [InlineKeyboardButton("❓ Help", callback_data="help_main")],
+            ]),
         )
 
 
@@ -586,6 +597,75 @@ async def gbanlist_cmd(_, message: Message):
     await message.reply_text(f"🔨 Globally banned users:\n{text}")
 
 
+# ---------- Explicit broadcast target commands ----------
+@bot.on_message(filters.command("setuser"))
+async def setuser_cmd(_, message: Message):
+    if not message.from_user or not await is_sudo(message.from_user.id):
+        return await message.reply_text("❌ Sirf owner/sudo user ye command use kar sakta hai.")
+    target = message.reply_to_message.from_user if message.reply_to_message and message.reply_to_message.from_user else None
+    if target is None and len(message.command) > 1:
+        try:
+            target = await bot.get_users(int(message.command[1]))
+        except Exception:
+            return await message.reply_text("❌ Valid user ID do ya user ke message par reply karke `/setuser` bhejo.")
+    if target is None:
+        return await message.reply_text("Use: user ke message par `/setuser`\nYa `/setuser USER_ID`")
+    await broadcast_users_col.update_one(
+        {"_id": int(target.id)},
+        {"$set": {"name": target.first_name or "User", "username": target.username}},
+        upsert=True,
+    )
+    await message.reply_text(f"✅ User set ho gaya: {target.mention}\n🆔 `{target.id}`")
+
+
+@bot.on_message(filters.command("unsetuser"))
+async def unsetuser_cmd(_, message: Message):
+    if not message.from_user or not await is_sudo(message.from_user.id):
+        return await message.reply_text("❌ Sirf owner/sudo user ye command use kar sakta hai.")
+    target = message.reply_to_message.from_user if message.reply_to_message and message.reply_to_message.from_user else None
+    if target is None and len(message.command) > 1:
+        try:
+            target_id = int(message.command[1])
+        except Exception:
+            return await message.reply_text("❌ Valid user ID do.")
+    elif target:
+        target_id = target.id
+    else:
+        return await message.reply_text("Use: `/unsetuser USER_ID` ya user ke message par reply karke `/unsetuser`")
+    await broadcast_users_col.delete_one({"_id": target_id})
+    await message.reply_text(f"🗑️ User `{target_id}` broadcast list se hata diya.")
+
+
+@bot.on_message(filters.command("setgroup") & filters.group)
+async def setgroup_cmd(_, message: Message):
+    if not message.from_user or not await is_sudo(message.from_user.id):
+        return await message.reply_text("❌ Sirf owner/sudo user ye command use kar sakta hai.")
+    chat = message.chat
+    await broadcast_groups_col.update_one(
+        {"_id": int(chat.id)},
+        {"$set": {"title": chat.title or "Group"}},
+        upsert=True,
+    )
+    await message.reply_text(f"✅ Group set ho gaya: **{chat.title or 'Group'}**\n🆔 `{chat.id}`")
+
+
+@bot.on_message(filters.command("unsetgroup") & filters.group)
+async def unsetgroup_cmd(_, message: Message):
+    if not message.from_user or not await is_sudo(message.from_user.id):
+        return await message.reply_text("❌ Sirf owner/sudo user ye command use kar sakta hai.")
+    await broadcast_groups_col.delete_one({"_id": int(message.chat.id)})
+    await message.reply_text("🗑️ Ye group broadcast list se hata diya.")
+
+
+@bot.on_message(filters.command("setlist"))
+async def setlist_cmd(_, message: Message):
+    if not message.from_user or not await is_sudo(message.from_user.id):
+        return await message.reply_text("❌ Sirf owner/sudo user ye command use kar sakta hai.")
+    users = await broadcast_users_col.count_documents({})
+    groups = await broadcast_groups_col.count_documents({})
+    await message.reply_text(f"📋 **Broadcast targets**\n👤 Users: `{users}`\n👥 Groups: `{groups}`\n\n/setuser — user add\n/setgroup — current group add\n/unsetuser — user remove\n/unsetgroup — group remove")
+
+
 # ---------- /broadcast: owner/sudo hi kar sakte hain ----------
 # Groups me bheja gaya message pin bhi kiya jata hai; personal (DM) sirf un users ko
 # jaate hai jinhone khud bot se private chat shuru ki hai — bot API se kisi aise
@@ -639,10 +719,50 @@ async def broadcast_cmd(_, message: Message):
     group_sent = group_failed = group_pinned = 0
     dm_sent = dm_failed = 0
 
+    # If explicitly registered targets exist, broadcast to those targets first.
+    # This is useful on deployments where get_dialogs() is incomplete.
+    explicit_users = [int(x["_id"]) async for x in broadcast_users_col.find({})]
+    explicit_groups = [int(x["_id"]) async for x in broadcast_groups_col.find({})]
+    explicit_targets = []
+    if mode in ("all", "dm"):
+        explicit_targets.extend((uid, False) for uid in explicit_users)
+    if mode in ("all", "groups"):
+        explicit_targets.extend((gid, True) for gid in explicit_groups)
+
+    for target_id, is_group in explicit_targets:
+        is_private = not is_group
+        for attempt in range(2):
+            try:
+                if source:
+                    sent = await source.copy(target_id)
+                else:
+                    sent = await bot.send_message(target_id, text)
+                if is_group:
+                    group_sent += 1
+                    try:
+                        await bot.pin_chat_message(target_id, sent.id)
+                        group_pinned += 1
+                    except Exception:
+                        pass
+                else:
+                    dm_sent += 1
+                break
+            except FloodWait as e:
+                await asyncio.sleep(e.value)
+            except Exception:
+                if is_group: group_failed += 1
+                else: dm_failed += 1
+                break
+        await asyncio.sleep(0.05)
+
+    # Also retain the existing dialog-based broadcast for backward compatibility.
+    explicit_ids = {x[0] for x in explicit_targets}
     async for dialog in bot.get_dialogs():
         chat = dialog.chat
         is_group = chat.type in (ChatType.GROUP, ChatType.SUPERGROUP)
         is_private = chat.type == ChatType.PRIVATE
+        if chat.id in explicit_ids:
+            continue
 
         if not (is_group or is_private):
             continue
@@ -1111,7 +1231,7 @@ async def play_cmd(_, message: Message):
 
     if len(queue) > 1:
         # already something playing, this one just got added above
-        return await msg.edit_text(f"Queue me add ho gaya: {title}")
+        return await msg.edit_text(f"Queue me add ho gaya: {title}", reply_markup=music_dm_keyboard())
 
     await start_playback(chat_id, msg)
 
@@ -1147,15 +1267,63 @@ async def vplay_cmd(_, message: Message):
     })
 
     if len(queue) > 1:
-        return await msg.edit_text(f"Queue me add ho gaya (video): {title}")
+        return await msg.edit_text(f"Queue me add ho gaya (video): {title}", reply_markup=music_dm_keyboard())
 
     await start_playback(chat_id, msg)
+
+
+@bot.on_message(filters.command("autoplay") & filters.group)
+async def autoplay_cmd(_, message: Message):
+    if not await is_group_admin(message.chat.id, message.from_user.id):
+        return await message.reply_text("Sirf group admins ya sudo users autoplay control kar sakte hain.")
+    arg = message.command[1].lower() if len(message.command) > 1 else "on"
+    if arg in ("on", "enable", "enabled"):
+        await set_setting(message.chat.id, "autoplay", True)
+        return await message.reply_text("🔁 **Autoplay ON** — queue ka next song automatically chalega.")
+    if arg in ("off", "disable", "disabled"):
+        await set_setting(message.chat.id, "autoplay", False)
+        return await message.reply_text("⏹️ **Autoplay OFF** — current track ke baad next queued track automatic nahi chalega.")
+    return await message.reply_text("Use: `/autoplay on` ya `/autoplay off`")
 
 
 def _build_stream(item: dict):
     if item["kind"] == "video":
         return MediaStream(item["path"], AudioQuality.HIGH, VideoQuality.SD_480p)
     return MediaStream(item["path"], video_flags=MediaStream.Flags.IGNORE)
+
+
+@bot.on_message(filters.command(["musicstatus", "vcstatus"]) & filters.group)
+async def music_status_cmd(_, message: Message):
+    """Diagnose the two things that most often block VC playback: assistant membership and local media files."""
+    chat_id = message.chat.id
+    lines = ["🎵 <b>BLACKBERRY MUSIC STATUS</b>"]
+    try:
+        me = await assistant.get_me()
+        lines.append(f"👤 Assistant: <b>{me.mention}</b> (<code>{me.id}</code>)")
+        try:
+            member = await assistant.get_chat_member(chat_id, me.id)
+            lines.append(f"👥 Assistant in group: <b>{member.status}</b>")
+        except Exception as e:
+            lines.append(f"❌ Assistant membership: <code>{str(e)[:180]}</code>")
+    except Exception as e:
+        lines.append(f"❌ Assistant session: <code>{str(e)[:180]}</code>")
+
+    queue = get_queue(chat_id)
+    if queue:
+        item = queue[0]
+        path = item.get("path")
+        exists = bool(path and os.path.exists(path))
+        size = os.path.getsize(path) if exists else 0
+        lines.append(f"🎶 Queue: <b>{len(queue)}</b>")
+        lines.append(f"📁 Media file: <b>{'OK' if exists else 'MISSING'}</b> ({size // 1024} KB)")
+        lines.append(f"▶️ Current: <b>{item.get('title', 'Unknown')}</b>")
+    else:
+        lines.append("🎶 Queue: <b>empty</b>")
+
+    autoplay = (await get_settings(chat_id)).get("autoplay", True)
+    lines.append(f"🔁 Autoplay: <b>{'ON' if autoplay else 'OFF'}</b>")
+    lines.append("ℹ️ /play se gaana queue hota hai; assistant account ko group me member hona chahiye.")
+    await message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 def render_now_playing_card(chat_id):
@@ -1173,7 +1341,11 @@ def render_now_playing_card(chat_id):
         f"🙋 **Requested by:** {state['requested_by']}\n\n"
         f"`{format_time(elapsed)}` {bar} `{format_time(duration)}`"
     )
+    # Screenshot-style Now Playing controls: autoplay toggle + playback controls.
+    # Autoplay default ON rakha gaya hai, taaki current track ke baad queue ka
+    # next track automatically play hota rahe.
     markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔁 AUTOPLAY: ON ✅", callback_data="np_autoplay")],
         [
             InlineKeyboardButton(play_icon, callback_data="np_playpause"),
             InlineKeyboardButton("🔁", callback_data="np_replay"),
@@ -1193,11 +1365,45 @@ async def start_playback(chat_id, msg=None):
     if not queue:
         return
     item = queue[0]
+
+    path = item.get("path")
+    if not path or not os.path.exists(path):
+        clear_queue(chat_id)
+        text = "❌ Music file missing ho gayi. `/play` dobara try karo."
+        if msg:
+            await msg.edit_text(text)
+        else:
+            await bot.send_message(chat_id, text)
+        return
+
+    # Give a useful error before PyTgCalls if the assistant is not in the group.
+    try:
+        assistant_me = await assistant.get_me()
+        member = await assistant.get_chat_member(chat_id, assistant_me.id)
+        member_status = str(getattr(member, "status", "")).lower()
+        if member_status in {"left", "kicked", "banned", "none"}:
+            raise RuntimeError(
+                f"Assistant account {assistant_me.mention} group me member nahi hai. "
+                "Use: group me assistant account ko add karo, phir /play dobara bhejo."
+            )
+    except Exception as e:
+        text = f"❌ Assistant/VC setup problem: {e}"
+        if msg:
+            await msg.edit_text(text)
+        else:
+            await bot.send_message(chat_id, text)
+        return
+
     try:
         await call_py.play(chat_id, _build_stream(item))
     except Exception as e:
-        text = (f"VC me join/play nahi ho paya: {e}\n\n"
-                f"Check karo ki VC pehle se on hai aur assistant account us group me hai.")
+        err = str(e)
+        hint = (
+            "\n\n💡 Pehle group ka Voice Chat start karo aur check karo ki assistant account group me member hai."
+            if "NoActiveGroupCall" in err or "active group call" in err.lower()
+            else ""
+        )
+        text = f"❌ VC me music start nahi hua: {err}{hint}\n\n/status ke liye /musicstatus bhejo."
         if msg:
             await msg.edit_text(text)
         else:
@@ -1249,9 +1455,12 @@ async def _advance_or_leave(chat_id):
         os.remove(finished["path"])
 
     queue = get_queue(chat_id)
-    if queue:
+    settings = await get_settings(chat_id)
+    if queue and settings.get("autoplay", True):
         await start_playback(chat_id)
         return True
+    if queue and not settings.get("autoplay", True):
+        clear_queue(chat_id)
     else:
         clear_state(chat_id)
         try:
@@ -1294,6 +1503,37 @@ async def now_playing_callback(_, cq: CallbackQuery):
 
     if not await is_group_admin(chat_id, cq.from_user.id):
         return await cq.answer("Sirf group admins ya sudo users ye control kar sakte hain.", show_alert=True)
+
+    if action == "autoplay":
+        current = bool((await get_settings(chat_id)).get("autoplay", True))
+        new_value = not current
+        await set_setting(chat_id, "autoplay", new_value)
+        # Button text ko ON/OFF state ke hisaab se update kar do.
+        text = cq.message.text or ""
+        try:
+            await cq.message.edit_text(
+                text,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        f"🔁 AUTOPLAY: {'ON ✅' if new_value else 'OFF ❌'}",
+                        callback_data="np_autoplay"
+                    )],
+                    [
+                        InlineKeyboardButton("▶️" if state["paused"] else "⏸️", callback_data="np_playpause"),
+                        InlineKeyboardButton("🔁", callback_data="np_replay"),
+                        InlineKeyboardButton("⏭️", callback_data="np_skip"),
+                        InlineKeyboardButton("⏹️", callback_data="np_stop"),
+                    ],
+                    [
+                        InlineKeyboardButton("❌ Close", callback_data="np_close"),
+                        InlineKeyboardButton("➕ Add to Playlist", callback_data="np_addpl"),
+                    ],
+                ]),
+                disable_web_page_preview=True,
+            )
+        except Exception:
+            pass
+        return await cq.answer(f"Autoplay {'ON ✅' if new_value else 'OFF ❌'}")
 
     if action == "playpause":
         try:

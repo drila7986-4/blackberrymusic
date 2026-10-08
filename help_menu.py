@@ -33,7 +33,7 @@ HELP_SECTIONS = {
         "`/purge` — reply se lekar is message tak sab delete\n"
         "`/warn` `/warnings` `/resetwarn` — warning system (3 warnings par auto-ban)\n"
         "`/admins` — group ke admins dikhata hai\n"
-        "`/settings` — group settings"
+        "`/settings` — group settings\n        `/setgroup` `/unsetgroup` — group registration"
     ),
     "sudo": (
         "👑 **Owner & Sudo**\n\n"
@@ -41,7 +41,7 @@ HELP_SECTIONS = {
         "`/sudolist` — sudo users\n"
         "`/gban` `/ungban` `/gbanlist` — global ban\n"
         "`/selfpromote` `/selfadmin` — admin power\n"
-        "`/whois <reply/tag/@username/id>` — user info\n"
+        "`/whois <reply/tag/@username/id>` — user info\n        `/setuser` `/unsetuser` `/setlist` — user registration\n"
         "`/groupadmins` — cached group admins overview\n\n"
         "📢 **Broadcast**\n"
         "`/broadcast <text>` ya message par reply — Groups + personal DMs dono\n"

@@ -184,37 +184,62 @@ async def cache_command_user(_, message: Message):
 
 @bot.on_message(filters.command("start"))
 async def start_cmd(_, message: Message):
-    if message.chat.type == ChatType.PRIVATE:
-        await mark_game_user_started(message.from_user.id)
-        await message.reply_text(
-            f"✨ **Welcome, {message.from_user.mention}!** ✨\n\n"
-            f"Main hu **{BOT_NAME}** — tumhara personal music aur video companion. 🎶\n\n"
-            "🎧 **Group voice chat** me live gaana ya video stream kar sakta hu\n"
-            "🔗 **YouTube link** ya naam, dono se chalega\n"
-            "↩️ Kisi **audio/video message** par reply karke bhi VC me chala sakta hu\n"
-            "🎵 DM me `/song <name>` se MP3 le sakte ho\n"
-            "🎮 DM me `/start` karke group me word games khelo aur **coins jeeto**\n"
-            "🏆 Game winner ko **300 coins** milenge; `/topcoins` se leaderboard dekho\n"
-            "🛠 Group management (mute, ban, warn, settings) bhi sambhal sakta hu\n\n"
-            "Neeche **❓ Help** dabao poori command list ke liye, ya mujhe apne group me add karo! 👇",
-            reply_markup=start_buttons(),
-        )
-    else:
-        await message.reply_text(
-            f"Namaste! Main **{BOT_NAME}** hu.\n\n"
-            "**Group voice chat me gaana/video bajane ke liye:**\n"
-            "/play <naam/link> - VC me audio stream karo\n"
-            "/vplay <naam/link> - VC me video stream karo\n"
-            "/pause /resume /skip /stop - playback control\n"
-            "/queue - queue dekho\n\n"
-            "**Direct MP3 chahiye to:**\n"
-            "/song <song name> - MP3 file bhej dunga\n\n"
-            "Poori list ke liye niche **❓ Help** dabao, ya /help bhejo.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎧 Open Music Bot in DM", url=f"https://t.me/{bot.me.username}?start=music")],
-                [InlineKeyboardButton("❓ Help", callback_data="help_main")],
-            ]),
-        )
+    # Show the complete feature/command menu immediately on /start.
+    # This is intentionally self-contained so the user does not have to press Help first.
+    username = getattr(getattr(bot, "me", None), "username", None) or "BlackberryMusicBot"
+    text = (
+        f"✨ **WELCOME TO {BOT_NAME}** ✨\n\n"
+        "🎧 **MUSIC & VIDEO**\n"
+        "• `/play <name/link>` — Voice Chat audio\n"
+        "• `/vplay <name/link>` — Voice Chat video + audio\n"
+        "• `/song <name/link>` — MP3 file\n"
+        "• `/pause` `/resume` `/skip` `/stop`\n"
+        "• `/queue` — current queue\n"
+        "• `/playlist` — saved playlists\n"
+        "• `/autoplay on|off` — automatic next song\n"
+        "• `/musicstatus` `/vcstatus` — playback/VC status\n\n"
+        "🔁 **AUTOPLAY**\n"
+        "Current song/video finish hote hi queue ka next item automatically play hota hai.\n"
+        "`/stop` queue + autoplay playback ko stop karta hai.\n\n"
+        "🛠️ **GROUP MANAGEMENT**\n"
+        "• `/kick` `/ban` `/unban`\n"
+        "• `/mute` `/unmute`\n"
+        "• `/warn` `/warnings` `/resetwarn`\n"
+        "• `/pin` `/unpin` `/purge`\n"
+        "• `/admins` `/settings`\n"
+        "• `/setgroup` `/unsetgroup` — group registration/settings\n\n"
+        "👤 **USER / OWNER**\n"
+        "• `/setuser` `/unsetuser` `/setlist`\n"
+        "• `/whois` `/userinfo` `/groupadmins`\n"
+        "• `/addsudo` `/delsudo` `/sudolist`\n"
+        "• `/gban` `/ungban` `/gbanlist`\n"
+        "• `/selfadmin` `/selfpromote`\n\n"
+        "📢 **BROADCAST**\n"
+        "• `/broadcast <text>` — groups + DMs\n"
+        "• `/broadcast groups <text>` — groups only\n"
+        "• `/broadcast dm <text>` — DMs only\n"
+        "• `/broadcast all <text>` — all registered chats\n\n"
+        "🎮 **GAMES & COINS**\n"
+        "• `/wordpuzzle easy|medium|hard`\n"
+        "• `/missing easy|medium|hard`\n"
+        "• `/gamescore` `/gamecancel`\n"
+        "• `/coins` `/topcoins`\n\n"
+        "ℹ️ **UTILITY**\n"
+        "• `/help` — detailed help\n"
+        "• `/ping` — bot latency\n"
+        "• `/start` — this complete feature menu\n\n"
+        "🎵 Add me to your group and start a Voice Chat to play music.\n"
+        "🔗 You can also open me directly in DM from the button below."
+    )
+    await message.reply_text(
+        text,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎧 Open Music Bot in DM", url=f"https://t.me/{username}?start=music")],
+            [InlineKeyboardButton("➕ Add me to your group", url=f"https://t.me/{username}?startgroup=true")],
+            [InlineKeyboardButton("❓ Detailed Help", callback_data="help_main")],
+            [InlineKeyboardButton("👑 Owner", url=f"tg://user?id={OWNER_ID}")],
+        ])
+    )
 
 
 @bot.on_message(filters.command("help"))
